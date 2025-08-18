@@ -1,69 +1,159 @@
 # YERM
 
-youTube Ethics Review Model
+YouTube Ethics Review Model
 
-## YouTube 댓글 크롤러 사용법
+## 1. Overview
 
-`src/youtube_crawler.py` 스크립트는 특정 YouTube 영상의 댓글과 메타데이터를 수집하여 `data/` 디렉토리에 저장합니다.
+This repository currently provides a YouTube comment crawler (`src/youtube_crawler.py`).
+It retrieves comments for a single public video, performs a simple text clean-up
+(retain Korean characters only), and can optionally save results to CSV and log to a file.
 
-생성 파일:
+> NOTE: Earlier documentation mentioned collecting full video metadata; the current
+> implementation focuses on comments only. Metadata aggregation can be added later.
 
-- 댓글: `data/날짜_영상제목.csv`
-- 메타데이터 누적: `data/metadata.csv`
-- 로그: `logs/crawler_YYYYMMDD.log`
+## 2. Environment Setup
 
-### 1. 환경 준비
-
-필수 패키지 설치:
+Install required packages (pip):
 
 ```bash
 pip install -r requirements.txt
 ```
 
-또는 conda 환경 사용:
+Or create the Conda environment:
 
 ```bash
 conda env create -f environment.yml
 conda activate yerm
 ```
 
-Chrome 브라우저가 설치되어 있어야 하며 Selenium 4.6+ 는 드라이버를 자동 관리합니다.
+Requirements:
 
-### 2. 실행 예시
+- Chrome browser installed (Selenium 4.6+ manages ChromeDriver automatically)
+- Stable network connection
+
+## 3. Direct CLI Usage (Python Module)
+
+Basic example (headless full crawl with scroll limit):
 
 ```bash
-python -m src.youtube_crawler --url "https://www.youtube.com/watch?v=M2WTUoy4y6E" --headless --max-scroll 250
+python -m src.youtube_crawler \
+	--url "https://www.youtube.com/watch?v=M2WTUoy4y6E" \
+	--headless \
+	--max-scroll 250 \
+	-o data/comments.csv \
+	--log-file logs/crawler.log
 ```
 
-옵션:
+### 3.1 Command Line Options
 
-- `--url` (필수): 대상 영상 URL
-- `--headless`: 브라우저 창을 띄우지 않는 모드
-- `--max-scroll` (기본 300): 스크롤 반복 최대 횟수
-- `--sleep-min` / `--sleep-max`: 스크롤 간 랜덤 대기 구간(초)
-- `--timeout`: 초기 로딩 타임아웃(초)
+| Option                  | Required          | Description                                        |
+| ----------------------- | ----------------- | -------------------------------------------------- |
+| `--url`                 | Yes               | Target YouTube video URL                           |
+| `--use {fulldata,test}` | No                | Full dataset (default) or test mode (top N)        |
+| `--n N`                 | When `--use test` | Keep only first N loaded comments                  |
+| `--headless`            | No                | Run Chrome in headless mode                        |
+| `--max-scroll N`        | No                | Hard cap on scroll attempts (auto-stop if omitted) |
+| `--log-level LEVEL`     | No                | Logging verbosity (DEBUG/INFO/...) default INFO    |
+| `-o, --output PATH`     | No                | Save comments to CSV at PATH                       |
+| `--log-file PATH`       | No                | Also write logs to PATH                            |
 
-### 3. 출력 컬럼
+### 3.2 Test Mode Example
 
-댓글 CSV: `username, comment, like_count, relative_time, comment_clean`
+Grab only the first 20 comments (quick verification):
 
-메타데이터 CSV: 실행일(run_date), video_id, video_title, channel_name, publish_date, view_count, like_count, comment_count, comments_file, source_url
+```bash
+python -m src.youtube_crawler \
+	--url "https://www.youtube.com/watch?v=VIDEO_ID" \
+	--use test --n 20 --headless
+```
 
-### 4. 주의사항
+## 4. Using `scripts/run_crawler.sh`
 
-- YouTube DOM 구조가 변경되면 선택자 수정이 필요할 수 있습니다.
-- 과도한 요청은 차단을 유발할 수 있으므로 스크롤 간 대기시간을 충분히 두세요.
+A convenience script is provided at the project root: `scripts/run_crawler.sh`.
 
-### 5. 환경 업데이트 방법
+1. Make it executable (first time only):
 
-`requirements.txt` 또는 `environment.yml` 수정 후:
+```bash
+chmod +x scripts/run_crawler.sh
+```
+
+2. Open the script and set `VIDEO_URL` near the top (or leave the example).
+3. Run:
+
+```bash
+./scripts/run_crawler.sh
+```
+
+```bash
+chmod +x scripts/run_crawler.sh
+```
+
+```bash
+./scripts/run_crawler.sh
+```
+
+What it does:
+
+- Creates `data/` and `logs/` if missing
+- Generates timestamped CSV `data/comments_YYYYMMDD_HHMMSS.csv`
+- Generates log file `logs/crawler_YYYYMMDD_HHMMSS.log`
+- Executes a full headless crawl (default block)
+
+Test crawl: Uncomment the "Test Crawl" example block inside the script to limit to top N comments.
+
+````
+
+What it does:
+
+- Creates `data/` and `logs/` if missing
+- Generates timestamped CSV `data/comments_YYYYMMDD_HHMMSS.csv`
+- Generates log file `logs/crawler_YYYYMMDD_HHMMSS.log`
+- Executes a full headless crawl (default block)
+
+Test crawl: Uncomment the "Test Crawl" example block inside the script to limit to top N comments.
+
+## 5. Output Schema
+
+When saving (`-o/--output`), the CSV columns are:
+
+| Column      | Description                                                |
+| ----------- | ---------------------------------------------------------- |
+| `usernames` | Comment author display names                               |
+| `n_likes`   | Like counts (string, '0' if empty)                         |
+| `times`     | Relative published time text (e.g., '2 days ago')          |
+| `comment`   | Cleaned comment text (non-Korean chars replaced by spaces) |
+
+## 6. Notes / Caveats
+
+- YouTube DOM / CSS selectors can change; update constants in `YouTubeCommentCrawler` if breakage occurs.
+- Aggressive rapid scrolling can trigger temporary rate-limiting; the crawler includes random pauses.
+- Headless mode may sometimes load fewer elements than a visible session; retry without `--headless` if counts seem low.
+- Internationalization: current cleaning step keeps only Korean characters; adapt the regex for multilingual needs.
+
+## 7. Extending / Roadmap Ideas
+
+Potential enhancements (not yet implemented):
+
+- Video/channel metadata enrichment
+- Reply thread expansion
+- Proxy / rotating user-agent support
+- Retry & backoff strategy abstraction
+- Batch crawl from a list of video IDs / URLs
+
+## 8. Updating the Environment
+
+After editing `environment.yml`:
 
 ```bash
 conda env update -f environment.yml --prune
-```
+````
 
-pip 전용 패키지 추가 시(environment.yml의 pip 섹션에 추가):
+If adding pip-only packages (in the pip subsection of `environment.yml`):
 
 ```bash
 conda env update -f environment.yml
 ```
+
+---
+
+Feel free to open issues or extend the crawler class for additional functionality.
