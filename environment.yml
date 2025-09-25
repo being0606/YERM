@@ -1,0 +1,17 @@
+name: yerm
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - pandas>=2.2.0
+  - selenium>=4.20.0
+  - matplotlib
+  - seaborn
+  - wordcloud
+  - numpy
+  - requests
+  - tqdm
+  - pip:
+      - soynlp
